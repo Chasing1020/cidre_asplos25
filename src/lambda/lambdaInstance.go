@@ -30,6 +30,7 @@ type LambdaInstance struct {
 // forwards requests from the function queue to that Sandbox.
 // when there are no requests, the Sandbox is paused.
 //
+// MODIFIED
 // The Sandbox will inform the function queue whenever it finishes
 // the current function execution and pull one request from the
 // delayed queue to execute it as a delayed warm start.
@@ -44,7 +45,7 @@ func (linst *LambdaInstance) Task() {
 
 	var sb sandbox.Sandbox = nil
 	var err error
-	done := make(chan bool)
+	// done := make(chan bool)
 
 	for {
 		// wait for a request (blocking) before making the
@@ -104,6 +105,7 @@ func (linst *LambdaInstance) Task() {
 		if sb == nil {
 			sb = nil
 
+			// MODIFIED: record queuing start time
 			req.queueStart = time.Now()
 			// send invocation to delayed queue, if room in queue
 			select {
@@ -113,6 +115,7 @@ func (linst *LambdaInstance) Task() {
 				req.w.WriteHeader(http.StatusTooManyRequests)
 				req.w.Write([]byte("delayed requests queue is full\n"))
 			}
+			// END MODIFIED
 
 			if f.lmgr.ImportCache != nil && f.rtType == common.RT_PYTHON {
 				scratchDir := f.lmgr.scratchDirs.Make(f.name)
@@ -135,6 +138,7 @@ func (linst *LambdaInstance) Task() {
 				t2.T1()
 			}
 
+			// MODIFIED: now that we have created the Sandbox
 			// grab one request from the delayed queue (or instance requests queue) (non-blocking)
 			select {
 			case req = <-f.delyChan:
@@ -148,6 +152,7 @@ func (linst *LambdaInstance) Task() {
 			if req == nil {
 				continue // no requests in queue, wait for future requests
 			}
+			// END MODIFIED
 
 			if err != nil {
 				linst.TrySendError(req, http.StatusInternalServerError, "could not create Sandbox: "+err.Error()+"\n", nil)
@@ -230,9 +235,11 @@ func (linst *LambdaInstance) Task() {
 
 			// grab another request either from delayed or requests queue (non-blocking)
 			select {
+			// MODIFIED: pull from delayed queue first
 			case req = <-f.delyChan:
 				queueEnd := time.Since(req.queueStart)
 				req.queuingMs = int(queueEnd.Milliseconds())
+			// END MODIFIED
 			case req = <-f.instChan:
 			default:
 				req = nil

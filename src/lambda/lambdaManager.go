@@ -40,9 +40,11 @@ type Invocation struct {
 	// signal to client that response has been written to w
 	done chan bool
 
+	// MODIFIED
 	// queuing delay for the requests
 	queueStart time.Time
 	queuingMs int
+	// END MODIFIED
 
 	// how many milliseconds did ServeHTTP take?  (doesn't count
 	// queue time or Sandbox init)
@@ -117,12 +119,14 @@ func (mgr *LambdaMgr) Get(name string) (f *LambdaFunc) {
 			lmgr:      mgr,
 			name:      name,
 			// make these configurable
+			// MODIFIED: increase queue sizes
 			funcChan:  make(chan *Invocation, 256),
 			instChan:  make(chan *Invocation, 256),
 			doneChan:  make(chan *Invocation, 256),
 			delyChan:  make(chan *Invocation, 256),
 			instances: list.New(),
 			coldPath:  true,
+			// END MODIFIED
 			killChan:  make(chan chan bool, 1),
 		}
 

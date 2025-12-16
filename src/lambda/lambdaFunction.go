@@ -31,11 +31,11 @@ type LambdaFunc struct {
 	funcChan  chan *Invocation // server to func
 	instChan  chan *Invocation // func to instances
 	doneChan  chan *Invocation // instances to func
-	delyChan  chan *Invocation // func to instances (delayed requests)
+	delyChan  chan *Invocation // func to instances (delayed requests) MODIFIED
 	instances *list.List
 
 	// cold start path trigger
-	coldPath bool
+	coldPath bool // MODIFIED
 
 	// send chan to the kill chan to destroy the instance, then
 	// wait for msg on sent chan to block until it is done
@@ -48,7 +48,8 @@ func (f *LambdaFunc) Invoke(w http.ResponseWriter, r *http.Request) {
 	defer t.T1()
 
 	done := make(chan bool)
-	req := &Invocation{w: w, r: r, done: done, queuingMs: 0}
+	// req := &Invocation{w: w, r: r, done: done}
+	req := &Invocation{w: w, r: r, done: done, queuingMs: 0} // MODIFIED
 
 	// send invocation to lambda func task, if room in queue
 	select {
@@ -247,7 +248,7 @@ func (f *LambdaFunc) Task() {
 	// stats for autoscaling
 	outstandingReqs := 0
 	execMs := common.NewRollingAvg(10)
-	queuingMs := common.NewRollingAvg(10)
+	queuingMs := common.NewRollingAvg(10) // MODIFIED
 	var lastScaling *time.Time = nil
 	timeout := time.NewTimer(0)
 
@@ -302,7 +303,7 @@ func (f *LambdaFunc) Task() {
 			// msg: instance -> function
 
 			execMs.Add(req.execMs)
-			queuingMs.Add(req.queuingMs)
+			queuingMs.Add(req.queuingMs) // MODIFIED
 			outstandingReqs--
 
 			// msg: function -> client
@@ -330,15 +331,16 @@ func (f *LambdaFunc) Task() {
 
 		// AUTOSCALING STEP 1: decide how many instances we want
 
-		// let's aim to have 1 sandbox per 200 milisecond of outstanding work
+		// let's aim to have 1 sandbox per 200 millisecond of outstanding work
 		inProgressWorkMs := outstandingReqs * execMs.Avg
-		desiredInstances := inProgressWorkMs / 200
+		desiredInstances := inProgressWorkMs / 200 // MODIFIED: 1000 -> 200
 
+		// MODIFIED: cold start path trigger
 		var trigNum float64 = 0.8
-
 		if trigNum * float64(queuingMs.Avg) > float64(execMs.Avg) {
 			f.coldPath = true
 		}
+		// END MODIFIED
 
 		// if we have, say, one job that will take 100
 		// seconds, spinning up 100 instances won't do any
@@ -370,15 +372,22 @@ func (f *LambdaFunc) Task() {
 		// kill or start at most one instance to get closer to
 		// desired number
 		if f.instances.Len() < desiredInstances {
-			if f.coldPath == true {
+			// f.printf("increase instances to %d", f.instances.Len()+1)
+			// f.newInstance()
+			// lastScaling = &now
+			// MODIFIED cold start path trigger
+			if f.coldPath {
 				f.printf("increase instances to %d", f.instances.Len()+1)
 				f.newInstance()
 				lastScaling = &now
 			}
+			// END MODIFIED
 		} else if f.instances.Len() > desiredInstances {
+			// MODIFIED cold start path trigger
 			if trigNum * float64(f.instances.Len()) > float64(desiredInstances) {
 				f.coldPath = false
 			}
+			// END MODIFIED
 			f.printf("reduce instances to %d", f.instances.Len()-1)
 			waitChan := f.instances.Back().Value.(*LambdaInstance).AsyncKill()
 			f.instances.Remove(f.instances.Back())

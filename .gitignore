@@ -82,3 +82,8 @@ scripts/dist
 scripts/open_lambda.egg-info
 
 *.lsm
+
+.vscode
+
+# Ignore local OpenLambda environment directory and its contents
+*/default-ol/*
